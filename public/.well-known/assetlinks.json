@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.web.cuentas_pwa.twa",
+    "sha256_cert_fingerprints": ["12:28:0C:44:A4:F1:1F:F7:B9:21:E1:86:31:33:DB:87:64:39:33:CC:AF:5D:05:00:88:E2:8A:C1:41:F9:77:7B"]
+  }
+}]
