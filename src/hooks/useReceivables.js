@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { logListActivity } from '../lib/listActivity'
+import { toLocalDateString, parseLocalDate } from '../lib/dateUtils'
 
 const RECEIVABLES = 'receivables'
 
@@ -30,12 +31,15 @@ export function useReceivables(listId) {
     )
     const unsub = onSnapshot(q, (snap) => {
       setItems(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-          expectedDate: d.data().expectedDate?.toDate?.()?.toISOString?.()?.slice(0, 10) ?? null,
-          createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? null,
-        }))
+        snap.docs.map((d) => {
+          const exp = d.data().expectedDate?.toDate?.()
+          return {
+            id: d.id,
+            ...d.data(),
+            expectedDate: exp ? toLocalDateString(exp) : null,
+            createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? null,
+          }
+        })
       )
       setLoading(false)
     })
@@ -50,7 +54,7 @@ export async function addReceivable(listId, { title, amount, expectedDate }) {
     listId,
     title: title.trim(),
     amount: Number(amount),
-    expectedDate: expectedDate ? new Date(expectedDate) : null,
+    expectedDate: expectedDate ? parseLocalDate(expectedDate) : null,
     createdAt: serverTimestamp(),
   })
   await logListActivity(listId, 'receivable_created', { title: title.trim() }).catch(() => {})

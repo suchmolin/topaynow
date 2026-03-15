@@ -1,6 +1,8 @@
 import { useState, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Navigate } from 'react-router-dom'
+import { useList } from '../hooks/useLists'
 import { usePayables, addPayable, markPayablePaid, isOverdueOrNoDate } from '../hooks/usePayables'
+import { formatLocalDate } from '../lib/dateUtils'
 import { useFixedExpenses } from '../hooks/useFixedExpenses'
 import { logListActivity } from '../lib/listActivity'
 import Modal from '../components/Modal'
@@ -12,7 +14,9 @@ function formatMoney(n) {
 
 export default function Payables() {
   const { listId } = useParams()
+  const { list } = useList(listId)
   const { items, loading } = usePayables(listId)
+  if (list?.listType === 'porHacer') return <Navigate to={`/list/${listId}/todos`} replace />
   const { items: fixedExpenses } = useFixedExpenses(listId)
   const [selectedIds, setSelectedIds] = useState(null) // null = use initial (overdue/no date), Set = user choice
   const [modalOpen, setModalOpen] = useState(false)
@@ -140,7 +144,7 @@ export default function Payables() {
             <div className="flex-1 min-w-0">
               <p className="font-medium text-gray-900 truncate">{item.title}</p>
               <p className="text-sm text-gray-500">
-                {item.dueDate ? `Vence: ${new Date(item.dueDate).toLocaleDateString('es')}` : 'Sin fecha'}
+                {item.dueDate ? `Vence: ${formatLocalDate(item.dueDate)}` : 'Sin fecha'}
                 {isOverdueOrNoDate(item.dueDate) && !item.dueDate && ' • Pendiente'}
                 {item.dueDate && isOverdueOrNoDate(item.dueDate) && ' • Vencida'}
               </p>

@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Navigate } from 'react-router-dom'
+import { useList } from '../hooks/useLists'
 import { useFixedExpenses, addFixedExpense, deleteFixedExpense } from '../hooks/useFixedExpenses'
 import Modal from '../components/Modal'
 import FAB from '../components/FAB'
@@ -10,7 +11,9 @@ function formatMoney(n) {
 
 export default function FixedExpenses() {
   const { listId } = useParams()
+  const { list } = useList(listId)
   const { items, loading } = useFixedExpenses(listId)
+  if (list?.listType === 'porHacer') return <Navigate to={`/list/${listId}/todos`} replace />
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState(null)

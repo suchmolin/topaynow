@@ -1,6 +1,8 @@
 import { useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, Navigate } from 'react-router-dom'
+import { useList } from '../hooks/useLists'
 import { useReceivables, addReceivable } from '../hooks/useReceivables'
+import { formatLocalDate } from '../lib/dateUtils'
 import Modal from '../components/Modal'
 import FAB from '../components/FAB'
 
@@ -10,7 +12,9 @@ function formatMoney(n) {
 
 export default function Receivables() {
   const { listId } = useParams()
+  const { list } = useList(listId)
   const { items, loading } = useReceivables(listId)
+  if (list?.listType === 'porHacer') return <Navigate to={`/list/${listId}/todos`} replace />
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ title: '', amount: '', expectedDate: '' })
@@ -103,7 +107,7 @@ export default function Receivables() {
               <p className="font-medium text-gray-900 truncate">{item.title}</p>
               {item.expectedDate && (
                 <p className="text-sm text-gray-500">
-                  Fecha probable: {new Date(item.expectedDate).toLocaleDateString('es')}
+                  Fecha probable: {formatLocalDate(item.expectedDate)}
                 </p>
               )}
             </div>

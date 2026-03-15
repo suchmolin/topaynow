@@ -80,12 +80,16 @@ export function useList(listId) {
   return { list, loading }
 }
 
-export async function createList(ownerId, title) {
+/** @type {'gastos'|'porHacer'} */
+export const LIST_TYPES = { GASTOS: 'gastos', POR_HACER: 'porHacer' }
+
+export async function createList(ownerId, title, listType = LIST_TYPES.GASTOS) {
   const ref = await addDoc(collection(db, LISTS), {
     title: title.trim(),
     ownerId,
     memberIds: [ownerId],
     inviteToken: null,
+    listType: listType === LIST_TYPES.POR_HACER ? 'porHacer' : 'gastos',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })

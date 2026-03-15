@@ -84,7 +84,8 @@ export default function Settings() {
   }
 
   if (!isOwner) {
-    return <Navigate to={`/list/${listId}/payables`} replace />
+    const defaultPath = list.listType === 'porHacer' ? 'todos' : 'payables'
+    return <Navigate to={`/list/${listId}/${defaultPath}`} replace />
   }
 
   async function handleRemoveMember() {

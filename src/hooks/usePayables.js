@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { logListActivity } from '../lib/listActivity'
+import { toLocalDateString, parseLocalDate, isLocalDateInPast } from '../lib/dateUtils'
 
 const PAYABLES = 'payables'
 
@@ -32,13 +33,16 @@ export function usePayables(listId) {
     )
     const unsub = onSnapshot(q, (snap) => {
       setItems(
-        snap.docs.map((d) => ({
-          id: d.id,
-          ...d.data(),
-          dueDate: d.data().dueDate?.toDate?.()?.toISOString?.()?.slice(0, 10) ?? null,
-          paidAt: d.data().paidAt?.toDate?.()?.toISOString?.() ?? null,
-          createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? null,
-        }))
+        snap.docs.map((d) => {
+          const due = d.data().dueDate?.toDate?.()
+          return {
+            id: d.id,
+            ...d.data(),
+            dueDate: due ? toLocalDateString(due) : null,
+            paidAt: d.data().paidAt?.toDate?.()?.toISOString?.() ?? null,
+            createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? null,
+          }
+        })
       )
       setLoading(false)
     })
@@ -53,7 +57,7 @@ export async function addPayable(listId, { title, amount, dueDate, fixedExpenseI
     listId,
     title: title.trim(),
     amount: Number(amount),
-    dueDate: dueDate ? new Date(dueDate) : null,
+    dueDate: dueDate ? parseLocalDate(dueDate) : null,
     paidAt: null,
     fixedExpenseId: fixedExpenseId || null,
     createdAt: serverTimestamp(),
@@ -67,7 +71,5 @@ export async function markPayablePaid(id) {
 
 export function isOverdueOrNoDate(dueDate) {
   if (!dueDate) return true
-  const d = new Date(dueDate)
-  d.setHours(23, 59, 59, 999)
-  return d < new Date()
+  return isLocalDateInPast(dueDate)
 }

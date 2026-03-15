@@ -29,10 +29,11 @@ export default function InviteLanding() {
           return
         }
         setStatus('welcome')
+        const target = `/list/${listId}`
         if (alreadyMember) {
-          setTimeout(() => navigate(`/list/${listId}/payables`, { replace: true }), 1500)
+          setTimeout(() => navigate(target, { replace: true }), 1500)
         } else {
-          setTimeout(() => navigate(`/list/${listId}/payables`, { replace: true }), 2500)
+          setTimeout(() => navigate(target, { replace: true }), 2500)
         }
       })
       .catch(() => {

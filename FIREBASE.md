@@ -89,6 +89,20 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/lists/$(request.resource.data.listId)).data.memberIds;
     }
 
+    match /todos/{id} {
+      allow read, write: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(resource.data.listId))
+        && request.auth.uid in get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.memberIds;
+      allow create: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(request.resource.data.listId))
+        && request.auth.uid in get(/databases/$(database)/documents/lists/$(request.resource.data.listId)).data.memberIds;
+    }
+
+    match /todoRecurrenceTemplates/{id} {
+      allow read, write: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(resource.data.listId))
+        && request.auth.uid in get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.memberIds;
+      allow create: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(request.resource.data.listId))
+        && request.auth.uid in get(/databases/$(database)/documents/lists/$(request.resource.data.listId)).data.memberIds;
+    }
+
     match /users/{userId} {
       allow read: if isSignedIn();
       allow create, update: if isSignedIn() && request.auth.uid == userId;
@@ -109,6 +123,8 @@ service cloud.firestore {
    - **Colección `payables`**: `listId` (Ascending), `createdAt` (Descending).
    - **Colección `receivables`**: `listId` (Ascending), `createdAt` (Descending).
    - **Colección `fixedExpenses`**: `listId` (Ascending), `createdAt` (Descending).
+   - **Colección `todos`**: `listId` (Ascending), `createdAt` (Descending).
+   - **Colección `todoRecurrenceTemplates`**: `listId` (Ascending), `createdAt` (Descending).
 
    **Cómo rellenar "Crear un índice compuesto" en la consola:**
 
@@ -121,6 +137,10 @@ service cloud.firestore {
    - **Índice 4 – `fixedExpenses`:** ID: `fixedExpenses`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
 
    - **Índice 5 – `listActivity`:** ID: `listActivity`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
+
+   - **Índice 6 – `todos`:** ID: `todos`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
+
+   - **Índice 7 – `todoRecurrenceTemplates`:** ID: `todoRecurrenceTemplates`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
 
 ## 5. Dominios autorizados (Auth)
 
