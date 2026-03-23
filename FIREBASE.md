@@ -64,6 +64,10 @@ service cloud.firestore {
       allow delete: if isOwner(resource.data.ownerId);
     }
 
+    match /userListOrder/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
     match /listInvites/{token} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && get(/databases/$(database)/documents/lists/$(request.resource.data.listId)).data.ownerId == request.auth.uid;
@@ -98,6 +102,13 @@ service cloud.firestore {
     }
 
     match /todoRecurrenceTemplates/{id} {
+      allow read, write: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(resource.data.listId))
+        && request.auth.uid in get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.memberIds;
+      allow create: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(request.resource.data.listId))
+        && request.auth.uid in get(/databases/$(database)/documents/lists/$(request.resource.data.listId)).data.memberIds;
+    }
+
+    match /shoppingItems/{id} {
       allow read, write: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(resource.data.listId))
         && request.auth.uid in get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.memberIds;
       allow create: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(request.resource.data.listId))
@@ -146,6 +157,8 @@ service cloud.firestore {
    - **Índice 6 – `todos`:** ID: `todos`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
 
    - **Índice 7 – `todoRecurrenceTemplates`:** ID: `todoRecurrenceTemplates`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
+
+   - **Índice 7b – `shoppingItems`:** ID: `shoppingItems`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
 
    - **Índice 8 – `todos` (para Cloud Functions):** ID: `todos`. Campos: `listId` → **Ascendente**; `recurrenceTemplateId` → **Ascendente**; `instanceDate` → **Ascendente**. Crear.
 

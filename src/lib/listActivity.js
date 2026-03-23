@@ -35,6 +35,10 @@ export const ACTION_LABELS = {
   fixed_expense_created: 'Añadió gasto fijo',
   fixed_expense_deleted: 'Eliminó gasto fijo',
   todo_updated: 'Editó una tarea',
+  shopping_item_created: 'Añadió un artículo a la lista de compras',
+  shopping_item_updated: 'Editó un artículo',
+  shopping_item_purchased: 'Marcó un artículo como comprado',
+  shopping_item_deleted: 'Eliminó un artículo',
 }
 
 export function useListActivity(listId) {

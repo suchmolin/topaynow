@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
-import { useList } from '../hooks/useLists'
+import { useList, getListHomePath } from '../hooks/useLists'
 import { useReceivables, addReceivable } from '../hooks/useReceivables'
 import { formatLocalDate } from '../lib/dateUtils'
 import Modal from '../components/Modal'
@@ -14,7 +14,9 @@ export default function Receivables() {
   const { listId } = useParams()
   const { list } = useList(listId)
   const { items, loading } = useReceivables(listId)
-  if (list?.listType === 'porHacer') return <Navigate to={`/list/${listId}/todos`} replace />
+  if (list && list.listType !== 'gastos') {
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
+  }
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ title: '', amount: '', expectedDate: '' })

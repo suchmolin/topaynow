@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
-import { useList } from '../hooks/useLists'
+import { useList, getListHomePath } from '../hooks/useLists'
 import { useTodoRecurrenceTemplates, updateRecurrenceTemplate, deleteRecurrenceTemplate } from '../hooks/useTodoRecurrence'
 import { RECURRENCE_LABELS } from '../hooks/useTodos'
 import { formatLocalDate } from '../lib/dateUtils'
@@ -23,7 +23,7 @@ export default function RecurrenceTemplates() {
   )
 
   if (!listLoading && list && list.listType !== 'porHacer') {
-    return <Navigate to={`/list/${listId}/payables`} replace />
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
   }
 
   if (listLoading || !list) {

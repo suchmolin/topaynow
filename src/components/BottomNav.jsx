@@ -15,13 +15,20 @@ const POR_HACER_NAV_ITEMS = [
   { to: 'settings', label: 'Configuración', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
 ]
 
+const COMPRAS_NAV_ITEMS = [
+  { to: 'shopping', label: 'Lista', icon: 'M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 8a2 2 0 11-4 0 2 2 0 014 0z' },
+  { to: 'purchased', label: 'Comprados', icon: 'M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z' },
+  { to: 'settings', label: 'Configuración', icon: 'M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z M15 12a3 3 0 11-6 0 3 3 0 016 0z' },
+]
+
 export default function BottomNav({ listId }) {
   const base = `/list/${listId}`
   const { user } = useAuth()
   const { list } = useList(listId)
   const isOwner = list?.ownerId === user?.uid
   const isPorHacer = list?.listType === 'porHacer'
-  const navItems = isPorHacer ? POR_HACER_NAV_ITEMS : GASTOS_NAV_ITEMS
+  const isCompras = list?.listType === 'compras'
+  const navItems = isCompras ? COMPRAS_NAV_ITEMS : isPorHacer ? POR_HACER_NAV_ITEMS : GASTOS_NAV_ITEMS
   const items = isOwner ? navItems : navItems.filter((item) => item.to !== 'settings')
 
   return (
@@ -34,7 +41,7 @@ export default function BottomNav({ listId }) {
         <NavLink
           key={to}
           to={`${base}/${to}`}
-          end={to === 'payables' || to === 'todos'}
+          end={to === 'payables' || to === 'todos' || to === 'shopping'}
           className={({ isActive }) =>
             `flex flex-col items-center justify-center flex-1 py-2 text-xs min-w-0 ${
               isActive ? 'text-primary-600 font-medium' : 'text-gray-500'

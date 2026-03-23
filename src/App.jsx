@@ -1,13 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { useList } from './hooks/useLists'
+import { useList, getListHomePath } from './hooks/useLists'
 
 function ListIndexRedirect() {
   const { listId } = useParams()
   const { list, loading } = useList(listId)
   if (loading || !list) return <div className="flex justify-center py-12"><p className="text-gray-500">Cargando…</p></div>
-  const isPorHacer = list.listType === 'porHacer'
-  return <Navigate to={isPorHacer ? 'todos' : 'payables'} replace />
+  return <Navigate to={getListHomePath(list.listType)} replace />
 }
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -19,6 +18,8 @@ import FixedExpenses from './pages/FixedExpenses'
 import Todos from './pages/Todos'
 import RecurrenceTemplates from './pages/RecurrenceTemplates'
 import Settings from './pages/Settings'
+import ShoppingList from './pages/ShoppingList'
+import ShoppingPurchased from './pages/ShoppingPurchased'
 import InviteLanding from './pages/InviteLanding'
 
 function ProtectedRoute({ children }) {
@@ -62,6 +63,8 @@ function AppRoutes() {
         <Route path="fixed" element={<FixedExpenses />} />
         <Route path="todos" element={<Todos />} />
         <Route path="recurrence" element={<RecurrenceTemplates />} />
+        <Route path="shopping" element={<ShoppingList />} />
+        <Route path="purchased" element={<ShoppingPurchased />} />
         <Route path="settings" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

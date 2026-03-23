@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useList } from '../hooks/useLists'
+import { useList, getListHomePath } from '../hooks/useLists'
 import { formatLocalDate, isLocalDateTodayOrInPast, toLocalDateString } from '../lib/dateUtils'
 import { requestNotificationPermission, notifyPendingTodayIfNeeded } from '../lib/notifications'
 import { registerFCMToken } from '../lib/fcm'
@@ -97,7 +97,7 @@ export default function Todos() {
   }, [pendingTodayIdsKey])
 
   if (!listLoading && list && list.listType !== 'porHacer') {
-    return <Navigate to={`/list/${listId}/payables`} replace />
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
   }
 
   if (listLoading || !list) {

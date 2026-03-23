@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
-import { useList } from '../hooks/useLists'
+import { useList, getListHomePath } from '../hooks/useLists'
 import { usePayables, addPayable, markPayablePaid, updatePayable, isOverdueOrNoDate } from '../hooks/usePayables'
 import { formatLocalDate } from '../lib/dateUtils'
 import { useFixedExpenses } from '../hooks/useFixedExpenses'
@@ -16,7 +16,9 @@ export default function Payables() {
   const { listId } = useParams()
   const { list } = useList(listId)
   const { items, loading } = usePayables(listId)
-  if (list?.listType === 'porHacer') return <Navigate to={`/list/${listId}/todos`} replace />
+  if (list && list.listType !== 'gastos') {
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
+  }
   const { items: fixedExpenses } = useFixedExpenses(listId)
   const [selectedIds, setSelectedIds] = useState(null) // null = use initial (overdue/no date), Set = user choice
   const [modalOpen, setModalOpen] = useState(false)

@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
-import { useLists, createList, LIST_TYPES, updateList, deleteListCompletely } from '../hooks/useLists'
+import { useLists, createList, LIST_TYPES, updateList, deleteListCompletely, getListHomePath } from '../hooks/useLists'
+import { useUserListOrder } from '../hooks/useUserListOrder'
 import { logListActivity } from '../lib/listActivity'
 import { formatLocalDate } from '../lib/dateUtils'
 import Modal from '../components/Modal'
@@ -13,6 +14,7 @@ export default function Listas() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const { lists, loading } = useLists(user?.uid)
+  const { orderedLists, saveOrder } = useUserListOrder(user?.uid, lists)
   const [modalOpen, setModalOpen] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newListDate, setNewListDate] = useState('')
@@ -26,8 +28,43 @@ export default function Listas() {
   const [pickListToEdit, setPickListToEdit] = useState(false)
   const [deleteListConfirmOpen, setDeleteListConfirmOpen] = useState(false)
   const [deletingList, setDeletingList] = useState(false)
+  /** Lista que acaba de moverse (resalte breve en la UI). */
+  const [flashListId, setFlashListId] = useState(null)
+  const flashTimeoutRef = useRef(null)
+
+  useEffect(() => {
+    return () => {
+      if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+    }
+  }, [])
 
   const hasOwnedList = lists.some((l) => l.ownerId === user?.uid)
+
+  const moveList = useCallback(
+    async (listId, direction) => {
+      const ids = orderedLists.map((l) => l.id)
+      const i = ids.indexOf(listId)
+      if (i < 0) return
+      const j = direction === 'up' ? i - 1 : i + 1
+      if (j < 0 || j >= ids.length) return
+      const next = [...ids]
+      ;[next[i], next[j]] = [next[j], next[i]]
+      try {
+        await saveOrder(next)
+        if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current)
+        setFlashListId(listId)
+        flashTimeoutRef.current = setTimeout(() => {
+          setFlashListId(null)
+          flashTimeoutRef.current = null
+        }, 900)
+      } catch {
+        alert(
+          'No se pudo guardar el orden. Comprueba las reglas de Firestore para userListOrder (ver FIREBASE.md).'
+        )
+      }
+    },
+    [orderedLists, saveOrder]
+  )
 
   async function handleCreateList(e) {
     e.preventDefault()
@@ -45,8 +82,7 @@ export default function Listas() {
       setNewTitle('')
       setNewListDate('')
       setListType('gastos')
-      const isPorHacer = listType === 'porHacer'
-      navigate(isPorHacer ? `/list/${id}/todos` : `/list/${id}/payables`)
+      navigate(`/list/${id}/${getListHomePath(listType)}`)
     } catch (err) {
       setError(err.message || 'Error al crear la lista.')
     } finally {
@@ -157,7 +193,10 @@ export default function Listas() {
       </div>
       {pickListToEdit && (
         <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2.5 text-sm text-primary-900">
-          <p className="pt-0.5">Selecciona la lista que quieres editar.</p>
+          <p className="pt-0.5">
+            Toca una lista para editarla
+            {orderedLists.length > 1 ? ', o usa las flechas para subirla o bajarla en la lista.' : '.'}
+          </p>
           <button
             type="button"
             onClick={() => setPickListToEdit(false)}
@@ -173,12 +212,15 @@ export default function Listas() {
         </p>
       ) : (
         <ul className="space-y-2">
-          {lists.map((list) => {
-            const isPorHacer = list.listType === 'porHacer'
-            const defaultPath = isPorHacer ? 'todos' : 'payables'
+          {orderedLists.map((list, index) => {
+            const defaultPath = getListHomePath(list.listType)
+            const typeLabel =
+              list.listType === 'porHacer' ? 'Por hacer' : list.listType === 'compras' ? 'Compras' : 'Gastos'
             const isOwner = list.ownerId === user?.uid
+            const canReorder = pickListToEdit && orderedLists.length > 1
+            const isFlashing = flashListId === list.id
             return (
-              <li key={list.id}>
+              <li key={list.id} className="flex gap-2 items-stretch">
                 <Link
                   to={`/list/${list.id}/${defaultPath}`}
                   onClick={(e) => {
@@ -187,16 +229,20 @@ export default function Listas() {
                       openEditList(list)
                     }
                   }}
-                  className={`block p-4 rounded-xl bg-white border shadow-sm hover:border-primary-200 active:bg-gray-50 ${
-                    pickListToEdit && isOwner
+                  className={`flex-1 min-w-0 block p-4 rounded-xl border shadow-sm transition-[background-color,border-color,box-shadow] duration-500 ease-out ${
+                    isFlashing
+                      ? 'bg-primary-50 border-primary-400 ring-2 ring-primary-200/70 shadow-md'
+                      : 'bg-white hover:border-primary-200 active:bg-gray-50'
+                  } ${
+                    pickListToEdit && isOwner && !isFlashing
                       ? 'border-primary-300 ring-1 ring-primary-200 cursor-pointer'
-                      : 'border-gray-200'
+                      : !isFlashing
+                        ? 'border-gray-200'
+                        : ''
                   }`}
                 >
                   <span className="font-medium text-gray-900">{list.title}</span>
-                  <span className="ml-2 text-xs text-gray-500">
-                    {isPorHacer ? 'Por hacer' : 'Gastos'}
-                  </span>
+                  <span className="ml-2 text-xs text-gray-500">{typeLabel}</span>
                   {isOwner && (
                     <span className="ml-2 text-xs text-gray-400">(creada por ti)</span>
                   )}
@@ -204,6 +250,45 @@ export default function Listas() {
                     <span className="block text-xs text-gray-500 mt-1">{formatLocalDate(list.listDate)}</span>
                   )}
                 </Link>
+                {canReorder && (
+                  <div
+                    className="flex flex-col justify-center gap-0 shrink-0 py-1 pr-0.5 pl-0"
+                    aria-label="Reordenar"
+                  >
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        void moveList(list.id, 'up')
+                      }}
+                      disabled={index === 0}
+                      className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                      title="Subir"
+                      aria-label="Subir"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        void moveList(list.id, 'down')
+                      }}
+                      disabled={index === orderedLists.length - 1}
+                      className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100/80 disabled:opacity-25 disabled:pointer-events-none transition-colors"
+                      title="Bajar"
+                      aria-label="Bajar"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.75} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
               </li>
             )
           })}
@@ -269,6 +354,18 @@ export default function Listas() {
                 />
                 <span className="font-medium text-gray-900">Lista por Hacer</span>
                 <span className="text-sm text-gray-500">Tareas y actividades recurrentes</span>
+              </label>
+              <label className="flex items-center gap-3 p-3 rounded-xl border border-gray-200 hover:bg-gray-50 cursor-pointer">
+                <input
+                  type="radio"
+                  name="listType"
+                  value={LIST_TYPES.COMPRAS}
+                  checked={listType === LIST_TYPES.COMPRAS}
+                  onChange={() => setListType(LIST_TYPES.COMPRAS)}
+                  className="text-primary-600 border-gray-300"
+                />
+                <span className="font-medium text-gray-900">Lista de compras</span>
+                <span className="text-sm text-gray-500">Artículos pendientes y comprados</span>
               </label>
             </div>
           </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
-import { useList } from '../hooks/useLists'
+import { useList, getListHomePath } from '../hooks/useLists'
 import { useFixedExpenses, addFixedExpense, deleteFixedExpense } from '../hooks/useFixedExpenses'
 import Modal from '../components/Modal'
 import FAB from '../components/FAB'
@@ -13,7 +13,9 @@ export default function FixedExpenses() {
   const { listId } = useParams()
   const { list } = useList(listId)
   const { items, loading } = useFixedExpenses(listId)
-  if (list?.listType === 'porHacer') return <Navigate to={`/list/${listId}/todos`} replace />
+  if (list && list.listType !== 'gastos') {
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
+  }
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [deleteId, setDeleteId] = useState(null)

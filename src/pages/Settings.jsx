@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useList, updateList, getOrCreateInviteToken, removeMemberFromList, deleteListCompletely } from '../hooks/useLists'
+import { useList, updateList, getOrCreateInviteToken, removeMemberFromList, deleteListCompletely, getListHomePath } from '../hooks/useLists'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useListActivity, ACTION_LABELS } from '../lib/listActivity'
 import { formatLocalDate } from '../lib/dateUtils'
@@ -103,8 +103,7 @@ export default function Settings() {
   }
 
   if (!isOwner) {
-    const defaultPath = list.listType === 'porHacer' ? 'todos' : 'payables'
-    return <Navigate to={`/list/${listId}/${defaultPath}`} replace />
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
   }
 
   async function handleRemoveMember() {
@@ -142,24 +141,6 @@ export default function Settings() {
             )}
           </div>
         </section>
-        {isOwner && (
-          <section>
-            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Zona de peligro</h2>
-            <div className="bg-white rounded-xl border border-red-200 p-4">
-              <p className="text-sm text-gray-600 mb-3">
-                Eliminar la lista borra todos los datos asociados (tareas, gastos, plantillas, historial, etc.).
-                Los invitados dejarán de verla. No se puede deshacer.
-              </p>
-              <button
-                type="button"
-                onClick={() => setDeleteListOpen(true)}
-                className="w-full py-3 rounded-xl border border-red-300 text-red-600 font-medium hover:bg-red-50"
-              >
-                Eliminar lista…
-              </button>
-            </div>
-          </section>
-        )}
         {isOwner && (
           <section>
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Invitar a la lista</h2>
@@ -225,6 +206,25 @@ export default function Settings() {
             )}
           </div>
         </section>
+
+        {isOwner && (
+          <section>
+            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Zona de peligro</h2>
+            <div className="bg-white rounded-xl border border-red-200 p-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Eliminar la lista borra todos los datos asociados (tareas, gastos, plantillas, historial, etc.).
+                Los invitados dejarán de verla. No se puede deshacer.
+              </p>
+              <button
+                type="button"
+                onClick={() => setDeleteListOpen(true)}
+                className="w-full py-3 rounded-xl border border-red-300 text-red-600 font-medium hover:bg-red-50"
+              >
+                Eliminar lista…
+              </button>
+            </div>
+          </section>
+        )}
       </div>
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar nombre de la lista">

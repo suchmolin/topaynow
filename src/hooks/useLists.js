@@ -18,6 +18,7 @@ import {
 import { getAuth } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { logListActivity } from '../lib/listActivity'
+import { appendListToUserOrder } from './useUserListOrder'
 
 const LISTS = 'lists'
 const TODOS = 'todos'
@@ -25,6 +26,7 @@ const PAYABLES = 'payables'
 const RECEIVABLES = 'receivables'
 const FIXED_EXPENSES = 'fixedExpenses'
 const TODO_TEMPLATES = 'todoRecurrenceTemplates'
+const SHOPPING_ITEMS = 'shoppingItems'
 const LIST_ACTIVITY = 'listActivity'
 const BATCH_MAX = 400
 
@@ -59,6 +61,7 @@ export async function deleteListCompletely(listId) {
   await deleteAllDocsForListId(RECEIVABLES, listId)
   await deleteAllDocsForListId(FIXED_EXPENSES, listId)
   await deleteAllDocsForListId(TODO_TEMPLATES, listId)
+  await deleteAllDocsForListId(SHOPPING_ITEMS, listId)
   await deleteAllDocsForListId(LIST_ACTIVITY, listId)
 
   const token = list.inviteToken
@@ -136,8 +139,21 @@ export function useList(listId) {
   return { list, loading }
 }
 
-/** @type {'gastos'|'porHacer'} */
-export const LIST_TYPES = { GASTOS: 'gastos', POR_HACER: 'porHacer' }
+/** @type {'gastos'|'porHacer'|'compras'} */
+export const LIST_TYPES = { GASTOS: 'gastos', POR_HACER: 'porHacer', COMPRAS: 'compras' }
+
+/** Ruta inicial por defecto según el tipo de lista (sin slash inicial). */
+export function getListHomePath(listType) {
+  if (listType === 'porHacer') return 'todos'
+  if (listType === 'compras') return 'shopping'
+  return 'payables'
+}
+
+function normalizeListTypeForStorage(listType) {
+  if (listType === LIST_TYPES.POR_HACER || listType === 'porHacer') return 'porHacer'
+  if (listType === LIST_TYPES.COMPRAS || listType === 'compras') return 'compras'
+  return 'gastos'
+}
 
 export async function createList(ownerId, title, listType = LIST_TYPES.GASTOS, listDate = null) {
   const ref = await addDoc(collection(db, LISTS), {
@@ -147,10 +163,11 @@ export async function createList(ownerId, title, listType = LIST_TYPES.GASTOS, l
     ownerId,
     memberIds: [ownerId],
     inviteToken: null,
-    listType: listType === LIST_TYPES.POR_HACER ? 'porHacer' : 'gastos',
+    listType: normalizeListTypeForStorage(listType),
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
+  await appendListToUserOrder(ownerId, ref.id).catch(() => {})
   return ref.id
 }
 
@@ -231,6 +248,7 @@ await updateDoc(listRef, {
     updatedAt: serverTimestamp(),
   })
   await logListActivity(listId, 'member_joined', { memberId: userId }).catch(() => {})
+  await appendListToUserOrder(userId, listId).catch(() => {})
   return { ok: true, listId, alreadyMember: false }
   } catch (e) {
     console.error('joinListByToken error', e)
