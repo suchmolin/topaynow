@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "node scripts/generate-firebase-messaging-sw.js",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "npm run build && npx firebase-tools deploy",
+    "deploy": "npm run build && npx firebase-tools deploy --only hosting",
+    "deploy:all": "npm run build && npx firebase-tools deploy",
     "generate-icons": "node scripts/generate-icons.js"
   },
   "dependencies": {

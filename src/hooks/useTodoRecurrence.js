@@ -56,25 +56,28 @@ export function useTodoRecurrenceTemplates(listId) {
   return { items, loading }
 }
 
-export async function addRecurrenceTemplate(listId, { title, frequency, dailyTime, startDate }) {
+export async function addRecurrenceTemplate(listId, { title, frequency, dailyTime, startDate, timezone }) {
+  const tz = timezone || Intl?.DateTimeFormat?.()?.resolvedOptions?.()?.timeZone || null
   const ref = await addDoc(collection(db, TEMPLATES), {
     listId,
     title: title.trim(),
     frequency: frequency || RECURRENCE_FREQUENCY.DAILY,
     dailyTime: dailyTime || null,
     startDate: startDate || new Date().toISOString().slice(0, 10),
+    timezone: tz,
     createdAt: serverTimestamp(),
   })
   await logListActivity(listId, 'recurrence_template_created', { title: title.trim() }).catch(() => {})
   return ref.id
 }
 
-export async function updateRecurrenceTemplate(id, listId, { title, frequency, dailyTime, startDate }) {
+export async function updateRecurrenceTemplate(id, listId, { title, frequency, dailyTime, startDate, timezone }) {
   const updates = {}
   if (title !== undefined) updates.title = title.trim()
   if (frequency !== undefined) updates.frequency = frequency
   if (dailyTime !== undefined) updates.dailyTime = dailyTime
   if (startDate !== undefined) updates.startDate = startDate
+  if (timezone !== undefined) updates.timezone = timezone
   if (Object.keys(updates).length === 0) return
   await updateDoc(doc(db, TEMPLATES, id), updates)
   if (listId && title) await logListActivity(listId, 'recurrence_template_updated', { title: title.trim() }).catch(() => {})

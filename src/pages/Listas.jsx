@@ -3,8 +3,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { signOut } from 'firebase/auth'
 import { auth } from '../lib/firebase'
 import { useAuth } from '../context/AuthContext'
-import { useLists, createList, LIST_TYPES } from '../hooks/useLists'
+import { useLists, createList, LIST_TYPES, updateList, deleteListCompletely } from '../hooks/useLists'
 import { logListActivity } from '../lib/listActivity'
+import { formatLocalDate } from '../lib/dateUtils'
 import Modal from '../components/Modal'
 import FAB from '../components/FAB'
 
@@ -14,9 +15,19 @@ export default function Listas() {
   const { lists, loading } = useLists(user?.uid)
   const [modalOpen, setModalOpen] = useState(false)
   const [newTitle, setNewTitle] = useState('')
+  const [newListDate, setNewListDate] = useState('')
   const [listType, setListType] = useState('gastos')
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
+  const [editListId, setEditListId] = useState(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [savingEdit, setSavingEdit] = useState(false)
+  const [editError, setEditError] = useState('')
+  const [pickListToEdit, setPickListToEdit] = useState(false)
+  const [deleteListConfirmOpen, setDeleteListConfirmOpen] = useState(false)
+  const [deletingList, setDeletingList] = useState(false)
+
+  const hasOwnedList = lists.some((l) => l.ownerId === user?.uid)
 
   async function handleCreateList(e) {
     e.preventDefault()
@@ -28,10 +39,11 @@ export default function Listas() {
     setCreating(true)
     setError('')
     try {
-      const id = await createList(user.uid, title, listType)
+      const id = await createList(user.uid, title, listType, newListDate.trim() || null)
       await logListActivity(id, 'list_created', { title }).catch(() => {})
       setModalOpen(false)
       setNewTitle('')
+      setNewListDate('')
       setListType('gastos')
       const isPorHacer = listType === 'porHacer'
       navigate(isPorHacer ? `/list/${id}/todos` : `/list/${id}/payables`)
@@ -45,8 +57,58 @@ export default function Listas() {
   function handleCloseModal() {
     setModalOpen(false)
     setNewTitle('')
+    setNewListDate('')
     setListType('gastos')
     setError('')
+  }
+
+  function openEditList(list) {
+    setEditListId(list.id)
+    setEditTitle(list.title || '')
+    setEditError('')
+    setPickListToEdit(false)
+  }
+
+  function handleCloseEditModal() {
+    setEditListId(null)
+    setEditTitle('')
+    setEditError('')
+    setDeleteListConfirmOpen(false)
+  }
+
+  async function handleSaveEditList(e) {
+    e.preventDefault()
+    const title = editTitle.trim()
+    if (!title) {
+      setEditError('Escribe un nombre para la lista.')
+      return
+    }
+    if (!editListId) return
+    setSavingEdit(true)
+    setEditError('')
+    try {
+      await updateList(editListId, { title })
+      handleCloseEditModal()
+    } catch (err) {
+      setEditError(err.message || 'Error al guardar.')
+    } finally {
+      setSavingEdit(false)
+    }
+  }
+
+  async function handleConfirmDeleteList() {
+    if (!editListId) return
+    setDeletingList(true)
+    setEditError('')
+    try {
+      await deleteListCompletely(editListId)
+      setDeleteListConfirmOpen(false)
+      handleCloseEditModal()
+    } catch (err) {
+      setEditError(err.message || 'No se pudo eliminar la lista.')
+    } finally {
+      setDeletingList(false)
+    }
   }
 
   async function handleLogout() {
@@ -64,16 +126,47 @@ export default function Listas() {
 
   return (
     <div className="px-4 py-6 pb-24">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4 gap-2">
         <h1 className="text-xl font-semibold text-gray-900">Mis listas</h1>
-        <button
-          type="button"
-          onClick={handleLogout}
-          className="text-sm text-gray-500 hover:text-gray-700"
-        >
-          Cerrar sesión
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          {hasOwnedList && (
+            <button
+              type="button"
+              onClick={() => setPickListToEdit((v) => !v)}
+              className={`p-2.5 rounded-full border ${
+                pickListToEdit
+                  ? 'border-primary-500 bg-primary-50 text-primary-700'
+                  : 'border-transparent text-gray-600 hover:bg-gray-100'
+              }`}
+              aria-label="Editar una lista"
+              title="Editar una lista"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="text-sm text-gray-500 hover:text-gray-700 px-2 py-1"
+          >
+            Cerrar sesión
+          </button>
+        </div>
       </div>
+      {pickListToEdit && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2.5 text-sm text-primary-900">
+          <p className="pt-0.5">Selecciona la lista que quieres editar.</p>
+          <button
+            type="button"
+            onClick={() => setPickListToEdit(false)}
+            className="shrink-0 font-medium text-primary-700 hover:underline"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
       {lists.length === 0 ? (
         <p className="text-gray-500 text-center py-12">
           Aún no tienes listas. Pulsa el botón + para crear una.
@@ -83,18 +176,32 @@ export default function Listas() {
           {lists.map((list) => {
             const isPorHacer = list.listType === 'porHacer'
             const defaultPath = isPorHacer ? 'todos' : 'payables'
+            const isOwner = list.ownerId === user?.uid
             return (
               <li key={list.id}>
                 <Link
                   to={`/list/${list.id}/${defaultPath}`}
-                  className="block p-4 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-primary-200 active:bg-gray-50"
+                  onClick={(e) => {
+                    if (pickListToEdit && isOwner) {
+                      e.preventDefault()
+                      openEditList(list)
+                    }
+                  }}
+                  className={`block p-4 rounded-xl bg-white border shadow-sm hover:border-primary-200 active:bg-gray-50 ${
+                    pickListToEdit && isOwner
+                      ? 'border-primary-300 ring-1 ring-primary-200 cursor-pointer'
+                      : 'border-gray-200'
+                  }`}
                 >
                   <span className="font-medium text-gray-900">{list.title}</span>
                   <span className="ml-2 text-xs text-gray-500">
                     {isPorHacer ? 'Por hacer' : 'Gastos'}
                   </span>
-                  {list.ownerId === user?.uid && (
+                  {isOwner && (
                     <span className="ml-2 text-xs text-gray-400">(creada por ti)</span>
+                  )}
+                  {list.listDate && (
+                    <span className="block text-xs text-gray-500 mt-1">{formatLocalDate(list.listDate)}</span>
                   )}
                 </Link>
               </li>
@@ -120,6 +227,19 @@ export default function Listas() {
               placeholder="Ej. Casa, Negocio…"
               autoFocus
             />
+          </div>
+          <div>
+            <label htmlFor="list-new-date" className="block text-sm font-medium text-gray-700 mb-1">
+              Fecha de referencia (opcional)
+            </label>
+            <input
+              id="list-new-date"
+              type="date"
+              value={newListDate}
+              onChange={(e) => setNewListDate(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none"
+            />
+            <p className="text-xs text-gray-500 mt-1">Ej. periodo o mes al que aplica la lista.</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -170,6 +290,80 @@ export default function Listas() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={!!editListId} onClose={handleCloseEditModal} title="Editar nombre de la lista">
+        <form onSubmit={handleSaveEditList} className="space-y-4">
+          <div>
+            <label htmlFor="edit-list-title" className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre de la lista
+            </label>
+            <input
+              id="edit-list-title"
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none"
+              placeholder="Título de la lista"
+              required
+            />
+          </div>
+          {editError && <p className="text-sm text-red-600">{editError}</p>}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleCloseEditModal}
+              className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={savingEdit}
+              className="flex-1 py-3 rounded-xl bg-primary-500 text-white font-medium hover:bg-primary-600 disabled:opacity-60"
+            >
+              {savingEdit ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+          <div className="pt-4 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={() => setDeleteListConfirmOpen(true)}
+              className="w-full py-3 rounded-xl border border-red-200 text-red-600 font-medium hover:bg-red-50"
+            >
+              Eliminar lista…
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={deleteListConfirmOpen}
+        onClose={() => !deletingList && setDeleteListConfirmOpen(false)}
+        title="Eliminar lista"
+      >
+        <p className="text-gray-600 mb-4">
+          ¿Seguro que quieres eliminar esta lista? Se borrarán todas las tareas, cuentas, gastos fijos y demás datos
+          vinculados. Los demás miembros dejarán de verla. Esta acción no se puede deshacer.
+        </p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            disabled={deletingList}
+            onClick={() => setDeleteListConfirmOpen(false)}
+            className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={deletingList}
+            onClick={handleConfirmDeleteList}
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-60"
+          >
+            {deletingList ? 'Eliminando…' : 'Sí, eliminar'}
+          </button>
+        </div>
       </Modal>
     </div>
   )

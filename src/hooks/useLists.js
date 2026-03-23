@@ -10,12 +10,68 @@ import {
   doc,
   getDoc,
   setDoc,
+  getDocs,
+  deleteDoc,
+  writeBatch,
   serverTimestamp,
 } from 'firebase/firestore'
+import { getAuth } from 'firebase/auth'
 import { db } from '../lib/firebase'
 import { logListActivity } from '../lib/listActivity'
 
 const LISTS = 'lists'
+const TODOS = 'todos'
+const PAYABLES = 'payables'
+const RECEIVABLES = 'receivables'
+const FIXED_EXPENSES = 'fixedExpenses'
+const TODO_TEMPLATES = 'todoRecurrenceTemplates'
+const LIST_ACTIVITY = 'listActivity'
+const BATCH_MAX = 400
+
+/** Borra todos los documentos de una colección con listId == listId */
+async function deleteAllDocsForListId(collectionName, listId) {
+  const q = query(collection(db, collectionName), where('listId', '==', listId))
+  const snap = await getDocs(q)
+  const docs = snap.docs
+  for (let i = 0; i < docs.length; i += BATCH_MAX) {
+    const batch = writeBatch(db)
+    docs.slice(i, i + BATCH_MAX).forEach((d) => batch.delete(d.ref))
+    await batch.commit()
+  }
+}
+
+/**
+ * Elimina la lista y todos los datos asociados (tareas, gastos, plantillas, historial, etc.).
+ * Solo el dueño puede ejecutarlo.
+ */
+export async function deleteListCompletely(listId) {
+  const uid = getAuth().currentUser?.uid
+  if (!uid) throw new Error('Debes iniciar sesión.')
+
+  const listRef = doc(db, LISTS, listId)
+  const listSnap = await getDoc(listRef)
+  if (!listSnap.exists()) throw new Error('La lista no existe.')
+  const list = listSnap.data()
+  if (list.ownerId !== uid) throw new Error('Solo el dueño de la lista puede eliminarla.')
+
+  await deleteAllDocsForListId(TODOS, listId)
+  await deleteAllDocsForListId(PAYABLES, listId)
+  await deleteAllDocsForListId(RECEIVABLES, listId)
+  await deleteAllDocsForListId(FIXED_EXPENSES, listId)
+  await deleteAllDocsForListId(TODO_TEMPLATES, listId)
+  await deleteAllDocsForListId(LIST_ACTIVITY, listId)
+
+  const token = list.inviteToken
+  if (token) {
+    try {
+      await deleteDoc(doc(db, 'listInvites', token))
+    } catch {
+      /* ya borrado o sin permiso */
+    }
+  }
+
+  await deleteDoc(listRef)
+}
 
 export function useLists(userId) {
   const [lists, setLists] = useState([])
@@ -83,9 +139,11 @@ export function useList(listId) {
 /** @type {'gastos'|'porHacer'} */
 export const LIST_TYPES = { GASTOS: 'gastos', POR_HACER: 'porHacer' }
 
-export async function createList(ownerId, title, listType = LIST_TYPES.GASTOS) {
+export async function createList(ownerId, title, listType = LIST_TYPES.GASTOS, listDate = null) {
   const ref = await addDoc(collection(db, LISTS), {
     title: title.trim(),
+    /** Fecha de referencia opcional (YYYY-MM-DD), ej. periodo o recordatorio de la lista */
+    listDate: listDate && String(listDate).trim() ? String(listDate).trim() : null,
     ownerId,
     memberIds: [ownerId],
     inviteToken: null,
@@ -96,12 +154,30 @@ export async function createList(ownerId, title, listType = LIST_TYPES.GASTOS) {
   return ref.id
 }
 
+/**
+ * Actualiza nombre y/o fecha de referencia de la lista (la UI de edición solo cambia el nombre).
+ * @param {string} listId
+ * @param {{ title?: string, listDate?: string | null }} fields
+ */
+export async function updateList(listId, { title, listDate } = {}) {
+  const updates = { updatedAt: serverTimestamp() }
+  if (title !== undefined) updates.title = title.trim()
+  if (listDate !== undefined) {
+    updates.listDate = listDate && String(listDate).trim() ? String(listDate).trim() : null
+  }
+  const hasField = title !== undefined || listDate !== undefined
+  if (!hasField) return
+  await updateDoc(doc(db, LISTS, listId), updates)
+  if (title !== undefined) {
+    await logListActivity(listId, 'list_title_updated', { newTitle: updates.title }).catch(() => {})
+  }
+  if (listDate !== undefined) {
+    await logListActivity(listId, 'list_date_updated', { listDate: updates.listDate }).catch(() => {})
+  }
+}
+
 export async function updateListTitle(listId, title) {
-  await updateDoc(doc(db, LISTS, listId), {
-    title: title.trim(),
-    updatedAt: serverTimestamp(),
-  })
-  await logListActivity(listId, 'list_title_updated', { newTitle: title.trim() }).catch(() => {})
+  await updateList(listId, { title })
 }
 
 export async function removeMemberFromList(listId, userIdToRemove, currentMemberIds) {

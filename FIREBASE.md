@@ -14,7 +14,7 @@ Sigue estos pasos para conectar la aplicación con tu proyecto de Firebase.
    ```bash
    cp .env.example .env
    ```
-2. Abre `.env` y rellena con los valores de tu proyecto (Firebase Console → Configuración del proyecto → Tus apps):
+2. Abre `.env` y rellena con los valores de tu proyecto (Firebase Console → Configuración del proyecto → Tus apps). Para notificaciones push, añade también la clave VAPID (ver sección 5.1):
    ```
    VITE_FIREBASE_API_KEY=...
    VITE_FIREBASE_AUTH_DOMAIN=...
@@ -22,6 +22,7 @@ Sigue estos pasos para conectar la aplicación con tu proyecto de Firebase.
    VITE_FIREBASE_STORAGE_BUCKET=...
    VITE_FIREBASE_MESSAGING_SENDER_ID=...
    VITE_FIREBASE_APP_ID=...
+   VITE_FIREBASE_VAPID_KEY=...   # Opcional; ver §5.1 (Mensajería en la nube → Certificados push web)
    ```
 
 ## 3. Autenticación
@@ -108,6 +109,10 @@ service cloud.firestore {
       allow create, update: if isSignedIn() && request.auth.uid == userId;
     }
 
+    match /users/{userId}/fcmTokens/{tokenId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
     match /listActivity/{id} {
       allow read: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(resource.data.listId))
         && request.auth.uid in get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.memberIds;
@@ -142,11 +147,55 @@ service cloud.firestore {
 
    - **Índice 7 – `todoRecurrenceTemplates`:** ID: `todoRecurrenceTemplates`. Campos: `listId` → **Ascendente**; `createdAt` → **Descendente**. Crear.
 
-## 5. Dominios autorizados (Auth)
+   - **Índice 8 – `todos` (para Cloud Functions):** ID: `todos`. Campos: `listId` → **Ascendente**; `recurrenceTemplateId` → **Ascendente**; `instanceDate` → **Ascendente**. Crear.
+
+   - **Índice 9 – `todos` (pendientes hoy):** ID: `todos`. Campos: `dueDateStr` → **Ascendente**. Crear (índice de un solo campo si hace falta).
+
+## 5. Notificaciones push (FCM) y Cloud Functions
+
+Para que las notificaciones lleguen **con la app cerrada** (y para que la app pueda solicitar el token FCM y enviar notificaciones desde código), necesitas la **clave VAPID**.
+
+### 5.1 Dónde encontrar o generar la clave VAPID
+
+La clave VAPID **no** está en la pantalla de “Crear notificación” (Mensajes de Firebase). Está en la **configuración del proyecto**:
+
+1. En [Firebase Console](https://console.firebase.google.com/), abre tu proyecto.
+2. Haz clic en el **engranaje** (⚙️) junto a “Descripción general del proyecto” → **Configuración del proyecto**.
+3. Ve a la pestaña **Mensajería en la nube** (Cloud Messaging).
+4. Baja hasta la sección **“Configuración web”** / **“Web configuration”**.
+5. Ahí verás **“Certificados de notificaciones push web”** / **“Web Push certificates”**.
+   - Si ya hay un **par de claves**: verás una clave larga que empieza por `B...` (es la clave **pública**). Esa es la VAPID key.
+   - Si no hay par de claves: haz clic en **“Generar par de claves”** / **“Generate key pair”**. Copia la clave que se muestra (la pública, la que empieza por `B...`).
+6. En la raíz del proyecto, abre `.env` y añade o edita:
+   ```
+   VITE_FIREBASE_VAPID_KEY=Bxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
+   (pega tu clave completa, sin espacios al inicio ni al final).
+7. Ejecuta `npm run build` o `npm run prebuild` para regenerar `public/firebase-messaging-sw.js` si hace falta.
+
+**Resumen de ruta:** Configuración del proyecto (⚙️) → pestaña **Mensajería en la nube** → sección **Configuración web** → **Certificados de notificaciones push web** → clave pública (o “Generar par de claves”).
+
+### 5.2 Cloud Functions
+
+1. Instala dependencias de las funciones:
+   ```bash
+   cd functions && npm install && cd ..
+   ```
+2. Despliega las funciones (requiere plan Blaze de Firebase):
+   ```bash
+   npx firebase-tools deploy --only functions
+   ```
+3. Se desplegarán:
+   - **recurrencePush**: cada minuto comprueba si hay tareas recurrentes que deban crearse a la hora programada (usa la zona horaria del usuario guardada al crear la plantilla) y envía un push.
+   - **pendingTodayPush**: cada día a las 13:00 UTC envía un push con las tareas pendientes para hoy.
+
+Si no tienes plan de pago, las notificaciones solo funcionarán **con la app abierta** (notificaciones locales).
+
+## 6. Dominios autorizados (Auth)
 
 Si vas a probar en `localhost`, ya está permitido. Si desplegarás en otro dominio, añádelo en **Autenticación** → **Configuración** → **Dominios autorizados**.
 
-## 6. Iconos PWA (opcional)
+## 7. Iconos PWA (opcional)
 
 Para que la PWA se instale con icono correcto, añade en `public/icons/`:
 

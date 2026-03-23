@@ -16,6 +16,7 @@ import {
 import { db } from '../lib/firebase'
 import { logListActivity } from '../lib/listActivity'
 import { toLocalDateString, parseLocalDate } from '../lib/dateUtils'
+import { notifyRecurrenceCreated } from '../lib/notifications'
 
 const TODOS = 'todos'
 const TEMPLATES = 'todoRecurrenceTemplates'
@@ -127,6 +128,7 @@ export async function ensureRecurrenceInstances(listId) {
     )
 
     const batch = writeBatch(db)
+    const createdTitles = []
     let count = 0
     const MAX_INSERT = 200
     for (const template of templates) {
@@ -141,18 +143,23 @@ export async function ensureRecurrenceInstances(listId) {
           listId,
           title: template.title,
           dueDate: instanceDate ? parseLocalDate(instanceDate) : null,
+          dueDateStr: instanceDate || null,
           doneAt: null,
           recurrenceTemplateId: template.id,
           instanceDate,
           createdAt: serverTimestamp(),
         })
+        createdTitles.push(template.title)
         existingKeys.add(key)
         count++
         if (count >= MAX_INSERT) break
       }
       if (count >= MAX_INSERT) break
     }
-    if (count > 0) await batch.commit()
+    if (count > 0) {
+      await batch.commit()
+      notifyRecurrenceCreated(createdTitles).catch(() => {})
+    }
   }
   const prev = ensureRecurrenceInstancesLast[listId]
   ensureRecurrenceInstancesLast[listId] = (prev || Promise.resolve()).then(run, run)
@@ -199,6 +206,7 @@ export function useTodos(listId) {
               dueDate: due ? toLocalDateString(due) : null,
               doneAt: d.data().doneAt?.toDate?.()?.toISOString?.() ?? null,
               createdAt: d.data().createdAt?.toDate?.()?.toISOString?.() ?? null,
+              deletedAt: d.data().deletedAt?.toDate?.()?.toISOString?.() ?? null,
             }
           })
         )
@@ -220,6 +228,7 @@ export async function addTodo(listId, { title, dueDate, recurrenceTemplateId, in
     listId,
     title: title.trim(),
     dueDate: dueDate ? parseLocalDate(dueDate) : null,
+    dueDateStr: dueDate || instanceDate || null,
     doneAt: null,
     recurrenceTemplateId: recurrenceTemplateId || null,
     instanceDate: instanceDate || null,
@@ -237,13 +246,17 @@ export async function markTodoUndone(id) {
 }
 
 export async function deleteTodo(id, listId, title) {
-  await deleteDoc(doc(db, TODOS, id))
+  await updateDoc(doc(db, TODOS, id), { deletedAt: serverTimestamp() })
   if (listId && title) await logListActivity(listId, 'todo_deleted', { title }).catch(() => {})
 }
 
 export async function updateTodo(id, { title, dueDate }) {
-  await updateDoc(doc(db, TODOS, id), {
-    title: title != null ? title.trim() : undefined,
-    dueDate: dueDate !== undefined ? (dueDate ? parseLocalDate(dueDate) : null) : undefined,
-  })
+  const updates = {}
+  if (title != null) updates.title = title.trim()
+  if (dueDate !== undefined) {
+    updates.dueDate = dueDate ? parseLocalDate(dueDate) : null
+    updates.dueDateStr = dueDate || null
+  }
+  if (Object.keys(updates).length === 0) return
+  await updateDoc(doc(db, TODOS, id), updates)
 }

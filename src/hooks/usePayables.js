@@ -69,6 +69,18 @@ export async function markPayablePaid(id) {
   await updateDoc(doc(db, PAYABLES, id), { paidAt: serverTimestamp() })
 }
 
+export async function updatePayable(id, listId, { title, amount, dueDate }) {
+  const updates = {}
+  if (title != null) updates.title = title.trim()
+  if (amount != null && Number.isFinite(Number(amount))) updates.amount = Number(amount)
+  if (dueDate !== undefined) {
+    updates.dueDate = dueDate ? parseLocalDate(dueDate) : null
+  }
+  if (Object.keys(updates).length === 0) return
+  await updateDoc(doc(db, PAYABLES, id), updates)
+  await logListActivity(listId, 'payable_updated', { title: updates.title ?? null }).catch(() => {})
+}
+
 export function isOverdueOrNoDate(dueDate) {
   if (!dueDate) return true
   return isLocalDateInPast(dueDate)

@@ -60,6 +60,7 @@ export default function RecurrenceTemplates() {
         frequency: editForm.frequency,
         dailyTime: editForm.dailyTime || null,
         startDate: editForm.startDate || undefined,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       })
       setEditId(null)
     } catch (err) {

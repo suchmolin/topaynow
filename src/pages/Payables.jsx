@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { useList } from '../hooks/useLists'
-import { usePayables, addPayable, markPayablePaid, isOverdueOrNoDate } from '../hooks/usePayables'
+import { usePayables, addPayable, markPayablePaid, updatePayable, isOverdueOrNoDate } from '../hooks/usePayables'
 import { formatLocalDate } from '../lib/dateUtils'
 import { useFixedExpenses } from '../hooks/useFixedExpenses'
 import { logListActivity } from '../lib/listActivity'
@@ -25,6 +25,11 @@ export default function Payables() {
   const [fixedPickOpen, setFixedPickOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [pickPayableToEdit, setPickPayableToEdit] = useState(false)
+  const [editingPayableId, setEditingPayableId] = useState(null)
+  const [editPayForm, setEditPayForm] = useState({ title: '', amount: '', dueDate: '' })
+  const [editPaySubmitting, setEditPaySubmitting] = useState(false)
+  const [editPayError, setEditPayError] = useState('')
 
   const unpaid = useMemo(() => items.filter((i) => !i.paidAt), [items])
   const initialSelected = useMemo(() => {
@@ -90,6 +95,42 @@ export default function Payables() {
   async function handleMarkPaid(id) {
     setConfirmPayId(id)
   }
+  function openEditPayable(item) {
+    setEditingPayableId(item.id)
+    setEditPayForm({
+      title: item.title || '',
+      amount: String(item.amount ?? ''),
+      dueDate: item.dueDate || '',
+    })
+    setEditPayError('')
+    setPickPayableToEdit(false)
+  }
+
+  async function handleSaveEditPayable(e) {
+    e.preventDefault()
+    const title = editPayForm.title.trim()
+    const amount = Number(editPayForm.amount)
+    if (!title || !Number.isFinite(amount) || amount <= 0) {
+      setEditPayError('Título y monto son obligatorios y el monto debe ser mayor que 0.')
+      return
+    }
+    if (!editingPayableId) return
+    setEditPaySubmitting(true)
+    setEditPayError('')
+    try {
+      await updatePayable(editingPayableId, listId, {
+        title,
+        amount,
+        dueDate: editPayForm.dueDate.trim() || null,
+      })
+      setEditingPayableId(null)
+    } catch (err) {
+      setEditPayError(err.message || 'Error al guardar.')
+    } finally {
+      setEditPaySubmitting(false)
+    }
+  }
+
   async function confirmMarkPaid() {
     if (!confirmPayId) return
     const item = items.find((i) => i.id === confirmPayId)
@@ -109,7 +150,7 @@ export default function Payables() {
   return (
     <div className="px-4 py-4 pb-28">
       {unpaid.length > 0 && (
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-2">
           <button
             type="button"
             onClick={isAllSelected ? deselectAll : selectAll}
@@ -117,14 +158,50 @@ export default function Payables() {
           >
             {isAllSelected ? 'Deseleccionar todo' : 'Seleccionar todo'}
           </button>
+          <button
+            type="button"
+            onClick={() => setPickPayableToEdit((v) => !v)}
+            className={`p-2.5 rounded-full border shrink-0 ${
+              pickPayableToEdit
+                ? 'border-primary-500 bg-primary-50 text-primary-700'
+                : 'border-transparent text-gray-600 hover:bg-gray-100'
+            }`}
+            aria-label="Editar un gasto"
+            title="Editar un gasto"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden>
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
+          </button>
+        </div>
+      )}
+      {pickPayableToEdit && (
+        <div className="mb-4 flex items-start justify-between gap-3 rounded-xl border border-primary-200 bg-primary-50 px-3 py-2.5 text-sm text-primary-900">
+          <p className="pt-0.5">Selecciona el gasto que quieres editar.</p>
+          <button
+            type="button"
+            onClick={() => setPickPayableToEdit(false)}
+            className="shrink-0 font-medium text-primary-700 hover:underline"
+          >
+            Cancelar
+          </button>
         </div>
       )}
       <ul className="space-y-2">
         {unpaid.map((item) => (
           <li
             key={item.id}
+            onClick={(e) => {
+              if (!pickPayableToEdit) return
+              if (e.target.closest('button')) return
+              openEditPayable(item)
+            }}
             className={`flex items-center gap-3 p-4 rounded-xl border bg-white ${
-              selectedSet.has(item.id) ? 'border-primary-400 ring-1 ring-primary-200' : 'border-gray-200'
+              pickPayableToEdit
+                ? 'border-primary-300 ring-1 ring-primary-200 cursor-pointer'
+                : selectedSet.has(item.id)
+                  ? 'border-primary-400 ring-1 ring-primary-200'
+                  : 'border-gray-200'
             }`}
           >
             <button
@@ -246,6 +323,59 @@ export default function Payables() {
             ))}
           </ul>
         )}
+      </Modal>
+
+      <Modal open={!!editingPayableId} onClose={() => setEditingPayableId(null)} title="Editar cuenta por pagar">
+        <form onSubmit={handleSaveEditPayable} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
+            <input
+              type="text"
+              value={editPayForm.title}
+              onChange={(e) => setEditPayForm((f) => ({ ...f, title: e.target.value }))}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Monto</label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              value={editPayForm.amount}
+              onChange={(e) => setEditPayForm((f) => ({ ...f, amount: e.target.value }))}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fecha estimada de pago (opcional)</label>
+            <input
+              type="date"
+              value={editPayForm.dueDate}
+              onChange={(e) => setEditPayForm((f) => ({ ...f, dueDate: e.target.value }))}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none"
+            />
+          </div>
+          {editPayError && <p className="text-sm text-red-600">{editPayError}</p>}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setEditingPayableId(null)}
+              className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={editPaySubmitting}
+              className="flex-1 py-3 rounded-xl bg-primary-500 text-white font-medium hover:bg-primary-600 disabled:opacity-60"
+            >
+              {editPaySubmitting ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </form>
       </Modal>
 
       <Modal open={!!confirmPayId} onClose={() => setConfirmPayId(null)} title="Marcar como pagado">

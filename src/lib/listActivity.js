@@ -25,13 +25,16 @@ export async function logListActivity(listId, action, details = {}) {
 export const ACTION_LABELS = {
   list_created: 'Creó la lista',
   list_title_updated: 'Cambió el título de la lista',
+  list_date_updated: 'Cambió la fecha de la lista',
   member_joined: 'Se unió a la lista',
   member_removed: 'Quitó a un invitado de la lista',
   payable_created: 'Añadió cuenta por pagar',
+  payable_updated: 'Editó una cuenta por pagar',
   payable_marked_paid: 'Marcó cuenta por pagar como pagada',
   receivable_created: 'Añadió cuenta por cobrar',
   fixed_expense_created: 'Añadió gasto fijo',
   fixed_expense_deleted: 'Eliminó gasto fijo',
+  todo_updated: 'Editó una tarea',
 }
 
 export function useListActivity(listId) {

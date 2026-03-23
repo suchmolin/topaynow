@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { useParams, Navigate } from 'react-router-dom'
+import { useParams, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useList, updateListTitle, getOrCreateInviteToken, removeMemberFromList } from '../hooks/useLists'
+import { useList, updateList, getOrCreateInviteToken, removeMemberFromList, deleteListCompletely } from '../hooks/useLists'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useListActivity, ACTION_LABELS } from '../lib/listActivity'
+import { formatLocalDate } from '../lib/dateUtils'
 import Modal from '../components/Modal'
 
 function MemberRow({ memberId, onRemove }) {
@@ -27,6 +28,7 @@ function MemberRow({ memberId, onRemove }) {
 
 export default function Settings() {
   const { listId } = useParams()
+  const navigate = useNavigate()
   const { user } = useAuth()
   const { list, loading } = useList(listId)
   const [editOpen, setEditOpen] = useState(false)
@@ -38,6 +40,9 @@ export default function Settings() {
   const [removeMemberId, setRemoveMemberId] = useState(null)
   const [removing, setRemoving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [deleteListOpen, setDeleteListOpen] = useState(false)
+  const [deletingList, setDeletingList] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   const isOwner = list?.ownerId === user?.uid
   const { items: activityItems, loading: activityLoading } = useListActivity(historyOpen ? listId : null)
@@ -49,10 +54,24 @@ export default function Settings() {
     if (!title) return
     setSaving(true)
     try {
-      await updateListTitle(listId, title)
+      await updateList(listId, { title })
       setEditOpen(false)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDeleteList() {
+    setDeletingList(true)
+    setDeleteError('')
+    try {
+      await deleteListCompletely(listId)
+      setDeleteListOpen(false)
+      navigate('/', { replace: true })
+    } catch (err) {
+      setDeleteError(err.message || 'No se pudo eliminar la lista.')
+    } finally {
+      setDeletingList(false)
     }
   }
 
@@ -109,14 +128,38 @@ export default function Settings() {
             {isOwner && (
               <button
                 type="button"
-                onClick={() => { setEditOpen(true); setNewTitle(list.title); }}
+                onClick={() => {
+                  setEditOpen(true)
+                  setNewTitle(list.title)
+                }}
                 className="text-sm text-primary-600 font-medium hover:underline"
               >
-                Editar título
+                Editar nombre
               </button>
+            )}
+            {list.listDate && (
+              <p className="text-sm text-gray-500 mt-1">Fecha: {formatLocalDate(list.listDate)}</p>
             )}
           </div>
         </section>
+        {isOwner && (
+          <section>
+            <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Zona de peligro</h2>
+            <div className="bg-white rounded-xl border border-red-200 p-4">
+              <p className="text-sm text-gray-600 mb-3">
+                Eliminar la lista borra todos los datos asociados (tareas, gastos, plantillas, historial, etc.).
+                Los invitados dejarán de verla. No se puede deshacer.
+              </p>
+              <button
+                type="button"
+                onClick={() => setDeleteListOpen(true)}
+                className="w-full py-3 rounded-xl border border-red-300 text-red-600 font-medium hover:bg-red-50"
+              >
+                Eliminar lista…
+              </button>
+            </div>
+          </section>
+        )}
         {isOwner && (
           <section>
             <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide mb-2">Invitar a la lista</h2>
@@ -184,16 +227,22 @@ export default function Settings() {
         </section>
       </div>
 
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar título de la lista">
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar nombre de la lista">
         <form onSubmit={handleSaveTitle} className="space-y-4">
-          <input
-            type="text"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none"
-            placeholder="Título de la lista"
-            required
-          />
+          <div>
+            <label htmlFor="settings-list-title" className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre de la lista
+            </label>
+            <input
+              id="settings-list-title"
+              type="text"
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none"
+              placeholder="Título de la lista"
+              required
+            />
+          </div>
           <div className="flex gap-3">
             <button type="button" onClick={() => setEditOpen(false)} className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50">
               Cancelar
@@ -203,6 +252,32 @@ export default function Settings() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={deleteListOpen} onClose={() => !deletingList && setDeleteListOpen(false)} title="Eliminar lista">
+        <p className="text-gray-600 mb-4">
+          ¿Seguro que quieres eliminar esta lista? Se borrarán todas las tareas, cuentas, gastos fijos, plantillas y
+          historial. Los demás miembros dejarán de verla. Esta acción no se puede deshacer.
+        </p>
+        {deleteError && <p className="text-sm text-red-600 mb-4">{deleteError}</p>}
+        <div className="flex gap-3">
+          <button
+            type="button"
+            disabled={deletingList}
+            onClick={() => setDeleteListOpen(false)}
+            className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={deletingList}
+            onClick={handleDeleteList}
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-60"
+          >
+            {deletingList ? 'Eliminando…' : 'Sí, eliminar'}
+          </button>
+        </div>
       </Modal>
 
       <Modal open={!!removeMemberId} onClose={() => setRemoveMemberId(null)} title="Quitar invitado">
@@ -239,7 +314,10 @@ export default function Settings() {
               {activityItems.map((entry) => {
                 const who = entry.userDisplayName || entry.userEmail || entry.userId?.slice(0, 8) + '…' || '—'
                 const actionLabel = ACTION_LABELS[entry.action] || entry.action
-                const detail = entry.details?.title || entry.details?.newTitle
+                const detail =
+                  entry.details?.title ||
+                  entry.details?.newTitle ||
+                  (entry.details?.listDate != null ? formatLocalDate(entry.details.listDate) : null)
                 const dateStr = entry.createdAt
                   ? new Date(entry.createdAt).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })
                   : '—'

@@ -7,6 +7,7 @@ import {
   signInWithPopup,
 } from 'firebase/auth'
 import { getFirestore } from 'firebase/firestore'
+import { getMessaging, isSupported as isMessagingSupported } from 'firebase/messaging'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,6 +21,15 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig)
 export const auth = getAuth(app)
 export const db = getFirestore(app)
+
+let messaging = null
+export async function getMessagingInstance() {
+  if (messaging) return messaging
+  const supported = await isMessagingSupported()
+  if (!supported) return null
+  messaging = getMessaging(app)
+  return messaging
+}
 
 // Persistir sesión en local storage hasta que cierre sesión
 export async function initAuthPersistence() {

@@ -39,11 +39,18 @@ Elige tu proyecto de Firebase (el mismo donde tienes Auth y Firestore). Si solo 
 ### 3. Build y despliegue
 
 ```bash
-npm run build
-npx firebase-tools deploy
+npm run deploy
 ```
 
-La primera vez solo se despliega Hosting. La URL quedará tipo:
+Ese comando hace `build` y despliega **solo Hosting** (`firebase deploy --only hosting`), así no necesitas el plan Blaze. La URL quedará tipo:
+
+Si más adelante activas el plan Blaze y quieres desplegar también Cloud Functions (notificaciones con la app cerrada), usa:
+
+```bash
+npm run deploy:all
+```
+
+La URL de tu app quedará tipo:
 
 - `https://<tu-project-id>.webapp.app`
 - `https://<tu-project-id>.firebaseapp.com`
@@ -60,15 +67,10 @@ Así login (incluido Google) funcionará en producción.
 ### 5. Siguientes despliegues
 
 ```bash
-npm run build
-npx firebase-tools deploy
-```
-
-O en un solo comando (usa el script `deploy` de `package.json`; requiere tener `firebase-tools` instalado en el proyecto o global):
-
-```bash
 npm run deploy
 ```
+
+(Este script hace build y `firebase deploy --only hosting`; no requiere plan Blaze.)
 
 ---
 
