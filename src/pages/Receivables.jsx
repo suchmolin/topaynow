@@ -12,11 +12,8 @@ function formatMoney(n) {
 
 export default function Receivables() {
   const { listId } = useParams()
-  const { list } = useList(listId)
+  const { list, loading: listLoading } = useList(listId)
   const { items, loading } = useReceivables(listId)
-  if (list && list.listType !== 'gastos') {
-    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
-  }
   const [selectedIds, setSelectedIds] = useState(new Set())
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ title: '', amount: '', expectedDate: '' })
@@ -62,12 +59,25 @@ export default function Receivables() {
     }
   }
 
-  if (loading) {
+  if (loading || listLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-gray-500">Cargando…</p>
       </div>
     )
+  }
+
+  if (!list) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-gray-500">La lista no existe.</p>
+      </div>
+    )
+  }
+
+  // Alineamos con BottomNav: solo redirigimos si es una lista de otro tipo principal.
+  if (list.listType === 'porHacer' || list.listType === 'compras') {
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
   }
 
   return (

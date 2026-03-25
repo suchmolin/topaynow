@@ -71,6 +71,9 @@ service cloud.firestore {
     match /listInvites/{token} {
       allow read: if isSignedIn();
       allow create: if isSignedIn() && get(/databases/$(database)/documents/lists/$(request.resource.data.listId)).data.ownerId == request.auth.uid;
+      allow delete: if isSignedIn()
+        && exists(/databases/$(database)/documents/lists/$(resource.data.listId))
+        && get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.ownerId == request.auth.uid;
     }
 
     match /payables/{id} {
@@ -129,6 +132,8 @@ service cloud.firestore {
         && request.auth.uid in get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.memberIds;
       allow create: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(request.resource.data.listId))
         && request.auth.uid in get(/databases/$(database)/documents/lists/$(request.resource.data.listId)).data.memberIds;
+      allow delete: if isSignedIn() && exists(/databases/$(database)/documents/lists/$(resource.data.listId))
+        && get(/databases/$(database)/documents/lists/$(resource.data.listId)).data.ownerId == request.auth.uid;
     }
   }
 }

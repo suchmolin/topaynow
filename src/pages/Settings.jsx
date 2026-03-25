@@ -69,7 +69,8 @@ export default function Settings() {
       setDeleteListOpen(false)
       navigate('/', { replace: true })
     } catch (err) {
-      setDeleteError(err.message || 'No se pudo eliminar la lista.')
+      console.error('handleDeleteList error:', err)
+      setDeleteError(err?.message || 'No se pudo eliminar la lista.')
     } finally {
       setDeletingList(false)
     }
@@ -217,7 +218,10 @@ export default function Settings() {
               </p>
               <button
                 type="button"
-                onClick={() => setDeleteListOpen(true)}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setDeleteListOpen(true)
+                }}
                 className="w-full py-3 rounded-xl border border-red-300 text-red-600 font-medium hover:bg-red-50"
               >
                 Eliminar lista…
@@ -264,7 +268,10 @@ export default function Settings() {
           <button
             type="button"
             disabled={deletingList}
-            onClick={() => setDeleteListOpen(false)}
+            onClick={(e) => {
+              e.stopPropagation()
+              setDeleteListOpen(false)
+            }}
             className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-60"
           >
             Cancelar
@@ -272,7 +279,10 @@ export default function Settings() {
           <button
             type="button"
             disabled={deletingList}
-            onClick={handleDeleteList}
+            onClick={(e) => {
+              e.stopPropagation()
+              void handleDeleteList()
+            }}
             className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 disabled:opacity-60"
           >
             {deletingList ? 'Eliminando…' : 'Sí, eliminar'}

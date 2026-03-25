@@ -14,11 +14,8 @@ function formatMoney(n) {
 
 export default function Payables() {
   const { listId } = useParams()
-  const { list } = useList(listId)
+  const { list, loading: listLoading } = useList(listId)
   const { items, loading } = usePayables(listId)
-  if (list && list.listType !== 'gastos') {
-    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
-  }
   const { items: fixedExpenses } = useFixedExpenses(listId)
   const [selectedIds, setSelectedIds] = useState(null) // null = use initial (overdue/no date), Set = user choice
   const [modalOpen, setModalOpen] = useState(false)
@@ -141,12 +138,27 @@ export default function Payables() {
     setConfirmPayId(null)
   }
 
-  if (loading) {
+  if (loading || listLoading) {
     return (
       <div className="flex items-center justify-center py-12">
         <p className="text-gray-500">Cargando…</p>
       </div>
     )
+  }
+
+  if (!list) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <p className="text-gray-500">La lista no existe.</p>
+      </div>
+    )
+  }
+
+  // Alineamos con BottomNav: solo redirigimos si es una lista de otro "tipo" principal.
+  // Si por cualquier motivo listType no es exactamente 'gastos' pero el menú lo muestra,
+  // no debemos volver a "por pagar".
+  if (list.listType === 'porHacer' || list.listType === 'compras') {
+    return <Navigate to={`/list/${listId}/${getListHomePath(list.listType)}`} replace />
   }
 
   return (
