@@ -24,6 +24,7 @@ export async function logListActivity(listId, action, details = {}) {
 
 export const ACTION_LABELS = {
   list_created: 'Creó la lista',
+  list_cloned: 'Creó una copia de otra lista de compras',
   list_title_updated: 'Cambió el título de la lista',
   list_date_updated: 'Cambió la fecha de la lista',
   member_joined: 'Se unió a la lista',
@@ -38,6 +39,8 @@ export const ACTION_LABELS = {
   shopping_item_created: 'Añadió un artículo a la lista de compras',
   shopping_item_updated: 'Editó un artículo',
   shopping_item_purchased: 'Marcó un artículo como comprado',
+  shopping_item_returned_to_pending: 'Devolvió un artículo a la lista de pendientes',
+  shopping_all_returned_to_pending: 'Devolvió todos los artículos comprados a pendientes',
   shopping_item_deleted: 'Eliminó un artículo',
 }
 

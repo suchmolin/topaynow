@@ -9,12 +9,16 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDocs,
+  writeBatch,
+  deleteField,
   serverTimestamp,
 } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { logListActivity } from '../lib/listActivity'
 
 const SHOPPING_ITEMS = 'shoppingItems'
+const BATCH_MAX = 400
 
 export function useShoppingItems(listId) {
   const [items, setItems] = useState([])
@@ -96,6 +100,42 @@ export async function markShoppingItemPurchased(id, listId, { price }) {
     includeInTotal: true,
   })
   await logListActivity(listId, 'shopping_item_purchased', {}).catch(() => {})
+}
+
+/** Devuelve un artículo comprado a la lista de pendientes. */
+export async function unmarkShoppingItemPurchased(id, listId, title) {
+  await updateDoc(doc(db, SHOPPING_ITEMS, id), {
+    purchasedAt: deleteField(),
+    price: null,
+    includeInTotal: true,
+  })
+  const t = title != null && String(title).trim() ? String(title).trim() : ''
+  await logListActivity(listId, 'shopping_item_returned_to_pending', { title: t }).catch(() => {})
+}
+
+/** Devuelve todos los artículos comprados de la lista a pendientes. */
+export async function unmarkAllShoppingItemsPurchased(listId) {
+  const snap = await getDocs(
+    query(collection(db, SHOPPING_ITEMS), where('listId', '==', listId))
+  )
+  const purchasedRefs = snap.docs.filter((d) => d.data().purchasedAt != null).map((d) => d.ref)
+  for (let i = 0; i < purchasedRefs.length; i += BATCH_MAX) {
+    const batch = writeBatch(db)
+    for (const ref of purchasedRefs.slice(i, i + BATCH_MAX)) {
+      batch.update(ref, {
+        purchasedAt: deleteField(),
+        price: null,
+        includeInTotal: true,
+      })
+    }
+    await batch.commit()
+  }
+  if (purchasedRefs.length > 0) {
+    await logListActivity(listId, 'shopping_all_returned_to_pending', {
+      count: purchasedRefs.length,
+    }).catch(() => {})
+  }
+  return purchasedRefs.length
 }
 
 export async function deleteShoppingItem(id, listId, title) {

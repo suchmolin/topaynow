@@ -46,6 +46,56 @@ async function deleteAllDocsForListId(collectionName, listId) {
  * Elimina la lista y todos los datos asociados (tareas, gastos, plantillas, historial, etc.).
  * Solo el dueño puede ejecutarlo.
  */
+/**
+ * Crea una nueva lista de compras con el mismo `listDate` y copia todos los artículos
+ * (pendientes y comprados). Solo el dueño de la lista origen puede clonarla.
+ * @returns {Promise<string>} id de la nueva lista
+ */
+export async function cloneShoppingList(sourceListId, newTitle) {
+  const uid = getAuth().currentUser?.uid
+  if (!uid) throw new Error('Debes iniciar sesión.')
+  const title = newTitle?.trim()
+  if (!title) throw new Error('Escribe un nombre para la nueva lista.')
+
+  const listRef = doc(db, LISTS, sourceListId)
+  const listSnap = await getDoc(listRef)
+  if (!listSnap.exists()) throw new Error('La lista no existe.')
+  const sourceList = listSnap.data()
+  if (sourceList.ownerId !== uid) throw new Error('Solo el dueño de la lista puede clonarla.')
+  if (normalizeListTypeForStorage(sourceList.listType) !== 'compras') {
+    throw new Error('Solo se pueden clonar listas de compras.')
+  }
+
+  const newListId = await createList(uid, title, LIST_TYPES.COMPRAS, sourceList.listDate ?? null)
+
+  const itemsSnap = await getDocs(
+    query(collection(db, SHOPPING_ITEMS), where('listId', '==', sourceListId))
+  )
+  for (let i = 0; i < itemsSnap.docs.length; i += BATCH_MAX) {
+    const batch = writeBatch(db)
+    for (const d of itemsSnap.docs.slice(i, i + BATCH_MAX)) {
+      const data = d.data()
+      const newItemRef = doc(collection(db, SHOPPING_ITEMS))
+      batch.set(newItemRef, {
+        listId: newListId,
+        title: data.title ?? '',
+        purchasedAt: data.purchasedAt ?? null,
+        price: data.price ?? null,
+        includeInTotal: data.includeInTotal !== false,
+        createdAt: data.createdAt ?? serverTimestamp(),
+      })
+    }
+    await batch.commit()
+  }
+
+  await logListActivity(newListId, 'list_cloned', {
+    sourceListId,
+    sourceTitle: sourceList.title ?? '',
+  }).catch(() => {})
+
+  return newListId
+}
+
 export async function deleteListCompletely(listId) {
   const uid = getAuth().currentUser?.uid
   if (!uid) throw new Error('Debes iniciar sesión.')

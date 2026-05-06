@@ -1,7 +1,15 @@
 import { useState } from 'react'
 import { useParams, Navigate, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useList, updateList, getOrCreateInviteToken, removeMemberFromList, deleteListCompletely, getListHomePath } from '../hooks/useLists'
+import {
+  useList,
+  updateList,
+  getOrCreateInviteToken,
+  removeMemberFromList,
+  deleteListCompletely,
+  getListHomePath,
+  cloneShoppingList,
+} from '../hooks/useLists'
 import { useUserProfile } from '../hooks/useUserProfile'
 import { useListActivity, ACTION_LABELS } from '../lib/listActivity'
 import { formatLocalDate } from '../lib/dateUtils'
@@ -43,6 +51,10 @@ export default function Settings() {
   const [deleteListOpen, setDeleteListOpen] = useState(false)
   const [deletingList, setDeletingList] = useState(false)
   const [deleteError, setDeleteError] = useState('')
+  const [cloneOpen, setCloneOpen] = useState(false)
+  const [cloneTitle, setCloneTitle] = useState('')
+  const [cloning, setCloning] = useState(false)
+  const [cloneError, setCloneError] = useState('')
 
   const isOwner = list?.ownerId === user?.uid
   const { items: activityItems, loading: activityLoading } = useListActivity(historyOpen ? listId : null)
@@ -58,6 +70,27 @@ export default function Settings() {
       setEditOpen(false)
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleCloneShoppingList(e) {
+    e.preventDefault()
+    const title = cloneTitle.trim()
+    if (!title) {
+      setCloneError('Escribe un nombre para la nueva lista.')
+      return
+    }
+    setCloning(true)
+    setCloneError('')
+    try {
+      const newId = await cloneShoppingList(listId, title)
+      setCloneOpen(false)
+      navigate(`/list/${newId}/shopping`, { replace: true })
+    } catch (err) {
+      console.error('handleCloneShoppingList error:', err)
+      setCloneError(err?.message || 'No se pudo clonar la lista.')
+    } finally {
+      setCloning(false)
     }
   }
 
@@ -126,16 +159,31 @@ export default function Settings() {
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <p className="font-medium text-gray-900 mb-1">{list.title}</p>
             {isOwner && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditOpen(true)
-                  setNewTitle(list.title)
-                }}
-                className="text-sm text-primary-600 font-medium hover:underline"
-              >
-                Editar nombre
-              </button>
+              <div className="flex flex-col items-start gap-2 mt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditOpen(true)
+                    setNewTitle(list.title)
+                  }}
+                  className="text-sm text-primary-600 font-medium hover:underline"
+                >
+                  Editar nombre
+                </button>
+                {list.listType === 'compras' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCloneOpen(true)
+                      setCloneTitle(`${list.title} (copia)`)
+                      setCloneError('')
+                    }}
+                    className="text-sm text-primary-600 font-medium hover:underline"
+                  >
+                    Clonar lista…
+                  </button>
+                )}
+              </div>
             )}
             {list.listDate && (
               <p className="text-sm text-gray-500 mt-1">Fecha: {formatLocalDate(list.listDate)}</p>
@@ -230,6 +278,48 @@ export default function Settings() {
           </section>
         )}
       </div>
+
+      <Modal open={cloneOpen} onClose={() => !cloning && setCloneOpen(false)} title="Clonar lista de compras">
+        <p className="text-sm text-gray-600 mb-4">
+          Se creará una lista nueva con los mismos artículos (pendientes y comprados) y la misma fecha de referencia.
+          Invitados y enlace de invitación no se copian.
+        </p>
+        <form onSubmit={handleCloneShoppingList} className="space-y-4">
+          <div>
+            <label htmlFor="settings-clone-title" className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre de la nueva lista
+            </label>
+            <input
+              id="settings-clone-title"
+              type="text"
+              value={cloneTitle}
+              onChange={(e) => setCloneTitle(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-primary-500 outline-none"
+              placeholder="Ej. Compras semana 2"
+              required
+              disabled={cloning}
+            />
+          </div>
+          {cloneError && <p className="text-sm text-red-600">{cloneError}</p>}
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setCloneOpen(false)}
+              disabled={cloning}
+              className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={cloning}
+              className="flex-1 py-3 rounded-xl bg-primary-500 text-white font-medium hover:bg-primary-600 disabled:opacity-60"
+            >
+              {cloning ? 'Clonando…' : 'Crear copia'}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Editar nombre de la lista">
         <form onSubmit={handleSaveTitle} className="space-y-4">
@@ -327,6 +417,7 @@ export default function Settings() {
                 const detail =
                   entry.details?.title ||
                   entry.details?.newTitle ||
+                  (entry.details?.count != null ? `${entry.details.count} artículos` : null) ||
                   (entry.details?.listDate != null ? formatLocalDate(entry.details.listDate) : null)
                 const dateStr = entry.createdAt
                   ? new Date(entry.createdAt).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })

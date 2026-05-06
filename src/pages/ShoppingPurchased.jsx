@@ -1,7 +1,13 @@
 import { useState, useMemo } from 'react'
 import { useParams, Navigate } from 'react-router-dom'
 import { useList, getListHomePath } from '../hooks/useLists'
-import { useShoppingItems, updateShoppingItem, deleteShoppingItem } from '../hooks/useShoppingItems'
+import {
+  useShoppingItems,
+  updateShoppingItem,
+  deleteShoppingItem,
+  unmarkShoppingItemPurchased,
+  unmarkAllShoppingItemsPurchased,
+} from '../hooks/useShoppingItems'
 import Modal from '../components/Modal'
 import ShoppingToolbar from '../components/ShoppingToolbar'
 
@@ -30,6 +36,10 @@ export default function ShoppingPurchased() {
 
   const [confirmDeleteId, setConfirmDeleteId] = useState(null)
   const [deleting, setDeleting] = useState(false)
+
+  const [returningId, setReturningId] = useState(null)
+  const [returnAllOpen, setReturnAllOpen] = useState(false)
+  const [returningAll, setReturningAll] = useState(false)
 
   const purchased = useMemo(() => items.filter((i) => i.purchasedAt), [items])
   const filtered = useMemo(
@@ -121,6 +131,29 @@ export default function ShoppingPurchased() {
     }
   }
 
+  async function handleReturnToPending(item) {
+    setReturningId(item.id)
+    try {
+      await unmarkShoppingItemPurchased(item.id, listId, item.title)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setReturningId(null)
+    }
+  }
+
+  async function handleReturnAllToPending() {
+    setReturningAll(true)
+    try {
+      await unmarkAllShoppingItemsPurchased(listId)
+      setReturnAllOpen(false)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setReturningAll(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -141,6 +174,15 @@ export default function ShoppingPurchased() {
     >
       <div className="flex items-center justify-between gap-2 mb-2">
         <h2 className="text-sm font-medium text-gray-500 uppercase tracking-wide">Comprados</h2>
+        {purchased.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setReturnAllOpen(true)}
+            className="text-xs font-medium text-primary-600 hover:text-primary-700 hover:underline shrink-0"
+          >
+            Devolver todos a pendientes
+          </button>
+        )}
       </div>
       <ShoppingToolbar
         filterOpen={filterOpen}
@@ -180,7 +222,29 @@ export default function ShoppingPurchased() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setConfirmDeleteId(item.id)}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void handleReturnToPending(item)
+                  }}
+                  disabled={returningId === item.id}
+                  className="shrink-0 p-1.5 rounded-lg text-primary-600 hover:bg-primary-50 disabled:opacity-50"
+                  title="Volver a la lista de pendientes"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3"
+                    />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setConfirmDeleteId(item.id)
+                  }}
                   className="shrink-0 p-1.5 rounded-lg text-red-600 hover:bg-red-50"
                   title="Eliminar"
                 >
@@ -265,6 +329,35 @@ export default function ShoppingPurchased() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={returnAllOpen}
+        onClose={() => !returningAll && setReturnAllOpen(false)}
+        title="Devolver todos a pendientes"
+      >
+        <p className="text-gray-600 mb-4">
+          Los {purchased.length} artículo{purchased.length === 1 ? '' : 's'} comprado{purchased.length === 1 ? '' : 's'}{' '}
+          volverán a la lista principal. Se quitará el precio guardado en cada uno.
+        </p>
+        <div className="flex gap-3">
+          <button
+            type="button"
+            disabled={returningAll}
+            onClick={() => setReturnAllOpen(false)}
+            className="flex-1 py-3 rounded-xl border border-gray-300 text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            disabled={returningAll}
+            onClick={() => void handleReturnAllToPending()}
+            className="flex-1 py-3 rounded-xl bg-primary-500 text-white font-medium hover:bg-primary-600 disabled:opacity-60"
+          >
+            {returningAll ? 'Devolviendo…' : 'Devolver todos'}
+          </button>
+        </div>
       </Modal>
 
       <Modal open={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} title="Eliminar">
